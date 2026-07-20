@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.linxira.Completion</id>
+  <name>Linxira Completion</name>
+  <summary>Complete software selected during offline installation</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      Displays pending installer selections, source and license details, and
+      delegates reviewed Arch package leaves to the Linxira transaction backend.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.linxira.Completion.desktop</launchable>
+  <provides>
+    <binary>linxira-completion-agent</binary>
+  </provides>
+  <releases>
+    <release version="0.1.0" date="2026-07-21"/>
+  </releases>
+  <url type="homepage">https://github.com/Linxira-OS/linxira-completion-agent</url>
+</component>
