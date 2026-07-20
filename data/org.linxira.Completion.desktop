@@ -5,5 +5,5 @@ Comment=Complete software selected during installation
 Exec=linxira-completion-agent
 Icon=system-software-install
 Terminal=false
-Categories=System;Settings;
+Categories=System;
 StartupNotify=true

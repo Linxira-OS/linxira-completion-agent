@@ -5,6 +5,9 @@
   <summary>Complete software selected during offline installation</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
+  <developer id="org.linxira">
+    <name>Linxira OS</name>
+  </developer>
   <description>
     <p>
       Displays pending installer selections, source and license details, and
@@ -15,6 +18,7 @@
   <provides>
     <binary>linxira-completion-agent</binary>
   </provides>
+  <content_rating type="oars-1.1"/>
   <releases>
     <release version="0.1.0" date="2026-07-21"/>
   </releases>
