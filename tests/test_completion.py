@@ -33,7 +33,9 @@ def catalog() -> dict:
             {"id": "chromium", "kind": "application", "primaryCategory": "apps", "name": {"en": "Chromium"}, "description": {"en": "Browser"}, "provider": "pacman", "source": "arch", "artifact": {"type": "package", "ids": ["chromium"]}, "license": {"spdx": "BSD-3-Clause", "requiresAcceptance": False}, "review": {"status": "reviewed"}, "availability": {"status": "available", "channel": "default"}, "sizeMiB": 300},
             {"id": "wps-office", "kind": "application", "primaryCategory": "apps", "name": {"en": "WPS"}, "description": {"en": "Office"}, "provider": "aur", "source": "aur", "artifact": {"type": "package", "ids": ["wps-office"]}, "license": {"spdx": "LicenseRef-WPS", "requiresAcceptance": True}, "review": {"status": "legal-review-pending"}, "availability": {"status": "review-channel", "channel": "optional-review", "reason": "Review pending"}, "sizeMiB": 900},
         ],
-        "components": [],
+        "components": [
+            {"id": "component-cups", "kind": "component", "name": {"en": "CUPS"}, "description": {"en": "Printing"}, "provider": "pacman", "source": "arch", "artifact": {"type": "package", "ids": ["cups"]}, "license": {"spdx": "Apache-2.0", "requiresAcceptance": False}, "review": {"status": "reviewed"}, "availability": {"status": "available", "channel": "default"}, "sizeMiB": 35},
+        ],
         "operations": [],
         "systemTools": [],
     }
@@ -64,6 +66,16 @@ class CompletionTests(unittest.TestCase):
         self.assertTrue(plan.items[0].executable)
         self.assertFalse(plan.items[1].executable)
         self.assertTrue(plan.items[1].sensitive)
+
+    def test_component_without_bundle_provenance_is_deferred(self) -> None:
+        receipt = json.loads(self.receipt_path.read_text(encoding="utf-8"))
+        receipt["selectedLeafIds"].append("component-cups")
+        receipt["pendingItems"].append("component-cups")
+        self.receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+        plan = load_completion_plan(self.catalog_path, self.receipt_path)
+        component = next(item for item in plan.items if item.id == "component-cups")
+        self.assertFalse(component.executable)
+        self.assertIn("bundle provenance", component.reason)
 
     def test_rejects_catalog_drift(self) -> None:
         self.catalog_path.write_text("{}", encoding="utf-8")

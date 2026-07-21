@@ -41,6 +41,7 @@ def _ids(value: Any, field: str) -> list[str]:
 @dataclass(frozen=True)
 class CompletionItem:
     id: str
+    kind: str
     name: str
     description: str
     provider: str
@@ -115,6 +116,7 @@ def load_completion_plan(catalog_path: Path, receipt_path: Path, *, locale: str 
         if leaf is None:
             raise CompletionError(f"pending item is not a Catalog v3 leaf: {leaf_id}")
         source_id = leaf.get("source")
+        kind = leaf.get("kind") if isinstance(leaf.get("kind"), str) else "unknown"
         source = sources.get(source_id, {})
         provider = leaf.get("provider") if isinstance(leaf.get("provider"), str) else "unknown"
         license_info = leaf.get("license") if isinstance(leaf.get("license"), dict) else {}
@@ -123,7 +125,7 @@ def load_completion_plan(catalog_path: Path, receipt_path: Path, *, locale: str 
         requires_acceptance = license_info.get("requiresAcceptance") is True
         user_opt_in = source.get("userOptInRequired") is True
         executable = (
-            provider == "pacman" and source_id == "arch"
+            kind == "application" and provider == "pacman" and source_id == "arch"
             and availability.get("status") == "available"
             and availability.get("channel") == "default"
             and review.get("status") == "reviewed"
@@ -133,12 +135,18 @@ def load_completion_plan(catalog_path: Path, receipt_path: Path, *, locale: str 
             repository_change = "Enable Arch multilib"
         elif user_opt_in:
             repository_change = f"Enable {source_id} (provider not implemented)"
-        reason = "Ready through official Arch repositories" if executable else (
-            availability.get("reason") if isinstance(availability.get("reason"), str)
-            else "The required provider or review contract is not implemented"
-        )
+        if executable:
+            reason = "Ready through official Arch repositories"
+        elif kind != "application" and provider == "pacman" and source_id == "arch":
+            reason = "Deferred until the installer receipt stores complete component bundle provenance"
+        else:
+            reason = (
+                availability.get("reason") if isinstance(availability.get("reason"), str)
+                else "The required provider or review contract is not implemented"
+            )
         items.append(CompletionItem(
             id=leaf_id,
+            kind=kind,
             name=_localized(leaf.get("name"), locale) or leaf_id,
             description=_localized(leaf.get("description"), locale),
             provider=provider,
