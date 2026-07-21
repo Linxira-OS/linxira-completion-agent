@@ -118,18 +118,33 @@ class CompletionTests(unittest.TestCase):
         plan = load_completion_plan(self.catalog_path, self.receipt_path)
 
         def execute(command, **kwargs):
-            output_dir = Path(command[command.index("--output-dir") + 1])
-            (output_dir / "request-plan.json").write_text(json.dumps({"directPackageTargets": ["chromium"]}), encoding="utf-8")
-            result = unittest.mock.Mock(returncode=0, stdout="{}", stderr="")
+            if command[1] == "plan":
+                output_dir = Path(command[command.index("--output-dir") + 1])
+                (output_dir / "request-plan.json").write_text(json.dumps({"directPackageTargets": ["chromium"]}), encoding="utf-8")
+            elif command[1] == "confirm":
+                output_dir = Path(command[command.index("--output-dir") + 1])
+                (output_dir / "confirmation.json").write_text("{}", encoding="utf-8")
+            result = unittest.mock.Mock(
+                returncode=0,
+                stdout=json.dumps({"status": "succeeded"}) if command[0] == "pkexec" else "{}",
+                stderr="",
+            )
             return result
 
         run.side_effect = execute
-        transaction = ComponentsBackend(self.catalog_path).create_plan(plan)
+        backend = ComponentsBackend(self.catalog_path)
+        transaction = backend.create_plan(plan)
         command = run.call_args.args[0]
         self.assertEqual(command[0:2], ["linxira-components", "plan"])
         self.assertFalse(run.call_args.kwargs["shell"])
         self.assertNotIn("chromium", command)
         self.assertNotIn("wps-office", command)
+        backend.confirm_and_apply(transaction)
+        self.assertEqual(
+            run.call_args.args[0],
+            ["pkexec", "linxira-components", "apply", "--confirmation", str(transaction.directory / "confirmation.json")],
+        )
+        self.assertNotIn("--catalog", run.call_args.args[0])
 
 
 if __name__ == "__main__":

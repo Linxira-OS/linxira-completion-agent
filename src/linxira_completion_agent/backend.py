@@ -53,7 +53,7 @@ class ComponentsBackend:
     def confirm_and_apply(self, transaction: Transaction) -> dict[str, Any]:
         try:
             self._run([self.executable, "confirm", "--catalog", str(self.catalog_path), "--plan", str(transaction.directory / "request-plan.json"), "--output-dir", str(transaction.directory)])
-            output = self._run([self.pkexec, self.executable, "apply", "--catalog", str(self.catalog_path), "--confirmation", str(transaction.directory / "confirmation.json")], timeout=3600)
+            output = self._run([self.pkexec, self.executable, "apply", "--confirmation", str(transaction.directory / "confirmation.json")], timeout=3600)
             value = json.loads(output)
             if not isinstance(value, dict) or value.get("status") != "succeeded":
                 raise CompletionError("transaction backend did not return a successful receipt")
