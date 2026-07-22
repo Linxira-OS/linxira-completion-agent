@@ -93,19 +93,38 @@ def load_completion_plan(catalog_path: Path, receipt_path: Path, *, locale: str 
     if receipt.get("catalogSha256") != catalog_digest:
         raise CompletionError("catalog changed after the installer selection was recorded")
     selected = _ids(receipt.get("selectedLeafIds"), "selectedLeafIds")
-    _ids(receipt.get("selectedBundleIds"), "selectedBundleIds")
+    selected_bundles = _ids(receipt.get("selectedBundleIds"), "selectedBundleIds")
     pending = _ids(receipt.get("pendingItems"), "pendingItems")
     if not set(pending).issubset(selected):
         raise CompletionError("pendingItems must be a subset of selectedLeafIds")
+    selection = receipt.get("selectionDocument")
+    if (
+        receipt.get("status") != "installed"
+        or not isinstance(selection, dict)
+        or selection.get("schemaVersion") != "org.linxira.component-selection.v1"
+        or selection.get("catalogSha256") != receipt.get("catalogSha256")
+        or selection.get("catalogRelease") != receipt.get("catalogRelease")
+        or selection.get("selectedLeafIds") != selected
+        or selection.get("selectedBundleIds") != selected_bundles
+    ):
+        raise CompletionError("installer receipt provenance is missing or inconsistent")
 
     sources = {
         item["id"]: item for item in catalog.get("sources", [])
         if isinstance(item, dict) and isinstance(item.get("id"), str)
     }
     leaves: dict[str, dict[str, Any]] = {}
-    for collection in ("applications", "components", "operations", "systemTools"):
+    for collection, expected_kind in (
+        ("applications", "application"),
+        ("components", "component"),
+        ("desktops", "desktop"),
+        ("operations", "operation"),
+        ("systemTools", "systemTool"),
+    ):
         for item in catalog.get(collection, []):
             if isinstance(item, dict) and isinstance(item.get("id"), str):
+                if item.get("kind", expected_kind) != expected_kind:
+                    raise CompletionError(f"invalid {collection} leaf kind: {item['id']}")
                 if item["id"] in leaves:
                     raise CompletionError(f"duplicate catalog leaf ID: {item['id']}")
                 leaves[item["id"]] = item
@@ -137,8 +156,10 @@ def load_completion_plan(catalog_path: Path, receipt_path: Path, *, locale: str 
             repository_change = f"Enable {source_id} (provider not implemented)"
         if executable:
             reason = "Ready through official Arch repositories"
-        elif kind != "application" and provider == "pacman" and source_id == "arch":
+        elif kind in {"component", "operation"} and provider == "pacman" and source_id == "arch":
             reason = "Deferred until the installer receipt stores complete component bundle provenance"
+        elif kind == "desktop":
+            reason = "Desktop environments are selected and installed only by the installer"
         else:
             reason = (
                 availability.get("reason") if isinstance(availability.get("reason"), str)

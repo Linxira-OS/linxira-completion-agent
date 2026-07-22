@@ -36,6 +36,9 @@ def catalog() -> dict:
         "components": [
             {"id": "component-cups", "kind": "component", "name": {"en": "CUPS"}, "description": {"en": "Printing"}, "provider": "pacman", "source": "arch", "artifact": {"type": "package", "ids": ["cups"]}, "license": {"spdx": "Apache-2.0", "requiresAcceptance": False}, "review": {"status": "reviewed"}, "availability": {"status": "available", "channel": "default"}, "sizeMiB": 35},
         ],
+        "desktops": [
+            {"id": "desktop-plasma", "kind": "desktop", "name": {"en": "Plasma"}, "description": {"en": "Desktop"}, "provider": "pacman", "source": "arch", "artifact": {"type": "package-group", "ids": ["plasma-meta"]}, "license": {"spdx": "GPL-2.0-or-later", "requiresAcceptance": False}, "review": {"status": "reviewed"}, "availability": {"status": "available", "channel": "default"}, "sizeMiB": 1000},
+        ],
         "operations": [],
         "systemTools": [],
     }
@@ -52,9 +55,18 @@ class CompletionTests(unittest.TestCase):
         self.receipt_path.write_text(json.dumps({
             "schemaVersion": "org.linxira.installer.selection-receipt.v1",
             "catalogSha256": digest,
+            "catalogRelease": "test",
             "selectedLeafIds": ["chromium", "wps-office"],
             "selectedBundleIds": ["apps"],
             "pendingItems": ["chromium", "wps-office"],
+            "status": "installed",
+            "selectionDocument": {
+                "schemaVersion": "org.linxira.component-selection.v1",
+                "catalogSha256": digest,
+                "catalogRelease": "test",
+                "selectedLeafIds": ["chromium", "wps-office"],
+                "selectedBundleIds": ["apps"],
+            },
         }), encoding="utf-8")
 
     def tearDown(self) -> None:
@@ -71,11 +83,42 @@ class CompletionTests(unittest.TestCase):
         receipt = json.loads(self.receipt_path.read_text(encoding="utf-8"))
         receipt["selectedLeafIds"].append("component-cups")
         receipt["pendingItems"].append("component-cups")
+        receipt["selectionDocument"]["selectedLeafIds"].append("component-cups")
         self.receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
         plan = load_completion_plan(self.catalog_path, self.receipt_path)
         component = next(item for item in plan.items if item.id == "component-cups")
         self.assertFalse(component.executable)
         self.assertIn("bundle provenance", component.reason)
+
+    def test_desktop_is_recognized_but_never_executable(self) -> None:
+        receipt = json.loads(self.receipt_path.read_text(encoding="utf-8"))
+        receipt["selectedLeafIds"].append("desktop-plasma")
+        receipt["pendingItems"].append("desktop-plasma")
+        receipt["selectionDocument"]["selectedLeafIds"].append("desktop-plasma")
+        self.receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+        plan = load_completion_plan(self.catalog_path, self.receipt_path)
+        desktop = next(item for item in plan.items if item.id == "desktop-plasma")
+        self.assertFalse(desktop.executable)
+        self.assertIn("only by the installer", desktop.reason)
+
+    def test_desktop_cannot_claim_application_kind(self) -> None:
+        document = catalog()
+        document["desktops"][0]["kind"] = "application"
+        self.catalog_path.write_text(json.dumps(document), encoding="utf-8")
+        digest = hashlib.sha256(self.catalog_path.read_bytes()).hexdigest()
+        receipt = json.loads(self.receipt_path.read_text(encoding="utf-8"))
+        receipt["catalogSha256"] = digest
+        receipt["selectionDocument"]["catalogSha256"] = digest
+        self.receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+        with self.assertRaisesRegex(CompletionError, "invalid desktops leaf kind"):
+            load_completion_plan(self.catalog_path, self.receipt_path)
+
+    def test_inconsistent_nested_selection_is_rejected(self) -> None:
+        receipt = json.loads(self.receipt_path.read_text(encoding="utf-8"))
+        receipt["selectionDocument"]["selectedLeafIds"] = ["chromium"]
+        self.receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+        with self.assertRaisesRegex(CompletionError, "inconsistent"):
+            load_completion_plan(self.catalog_path, self.receipt_path)
 
     def test_rejects_catalog_drift(self) -> None:
         self.catalog_path.write_text("{}", encoding="utf-8")

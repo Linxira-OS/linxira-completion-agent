@@ -32,7 +32,7 @@ def build_selection(plan: CompletionPlan) -> dict[str, Any]:
         raise CompletionError("no reviewed Arch items are ready to complete")
     leaves = {
         item["id"]: item
-        for collection in ("applications", "components", "operations", "systemTools")
+        for collection in ("applications", "components", "desktops", "operations", "systemTools")
         for item in plan.catalog.get(collection, [])
         if isinstance(item, dict) and isinstance(item.get("id"), str)
     }
