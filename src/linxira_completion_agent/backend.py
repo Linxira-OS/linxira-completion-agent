@@ -19,7 +19,13 @@ class Transaction:
 
 
 class ComponentsBackend:
-    def __init__(self, catalog_path: Path, *, executable: str = "linxira-components", pkexec: str = "pkexec") -> None:
+    def __init__(
+        self,
+        catalog_path: Path,
+        *,
+        executable: str = "/usr/bin/linxira-components",
+        pkexec: str = "/usr/bin/pkexec",
+    ) -> None:
         self.catalog_path = catalog_path
         self.executable = executable
         self.pkexec = pkexec
@@ -40,7 +46,14 @@ class ComponentsBackend:
         try:
             selection_path = directory / "selection.json"
             selection_path.write_text(json.dumps(selection, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-            self._run([self.executable, "plan", "--catalog", str(self.catalog_path), "--selection", str(selection_path), "--output-dir", str(directory)])
+            command = [
+                self.executable, "plan", "--catalog", str(self.catalog_path),
+                "--selection", str(selection_path), "--output-dir", str(directory),
+            ]
+            for item in completion.items:
+                if item.executable and item.requires_acceptance:
+                    command.extend(("--accept-license", item.id))
+            self._run(command)
             plan_path = directory / "request-plan.json"
             document = json.loads(plan_path.read_text(encoding="utf-8"))
             if not isinstance(document, dict) or not isinstance(document.get("directPackageTargets"), list):

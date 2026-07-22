@@ -169,7 +169,7 @@ class CompletionTests(unittest.TestCase):
                 (output_dir / "confirmation.json").write_text("{}", encoding="utf-8")
             result = unittest.mock.Mock(
                 returncode=0,
-                stdout=json.dumps({"status": "succeeded"}) if command[0] == "pkexec" else "{}",
+                stdout=json.dumps({"status": "succeeded"}) if command[0] == "/usr/bin/pkexec" else "{}",
                 stderr="",
             )
             return result
@@ -178,14 +178,14 @@ class CompletionTests(unittest.TestCase):
         backend = ComponentsBackend(self.catalog_path)
         transaction = backend.create_plan(plan)
         command = run.call_args.args[0]
-        self.assertEqual(command[0:2], ["linxira-components", "plan"])
+        self.assertEqual(command[0:2], ["/usr/bin/linxira-components", "plan"])
         self.assertFalse(run.call_args.kwargs["shell"])
         self.assertNotIn("chromium", command)
         self.assertNotIn("wps-office", command)
         backend.confirm_and_apply(transaction)
         self.assertEqual(
             run.call_args.args[0],
-            ["pkexec", "linxira-components", "apply", "--confirmation", str(transaction.directory / "confirmation.json")],
+            ["/usr/bin/pkexec", "/usr/bin/linxira-components", "apply", "--confirmation", str(transaction.directory / "confirmation.json")],
         )
         self.assertNotIn("--catalog", run.call_args.args[0])
 
