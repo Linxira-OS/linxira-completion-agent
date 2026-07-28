@@ -95,8 +95,26 @@ def load_completion_plan(catalog_path: Path, receipt_path: Path, *, locale: str 
     selected = _ids(receipt.get("selectedLeafIds"), "selectedLeafIds")
     selected_bundles = _ids(receipt.get("selectedBundleIds"), "selectedBundleIds")
     pending = _ids(receipt.get("pendingItems"), "pendingItems")
+    satisfied = _ids(receipt.get("satisfiedItems"), "satisfiedItems")
+    installed = _ids(receipt.get("installedItems"), "installedItems")
+    deferred = _ids(receipt.get("deferredItems"), "deferredItems")
     if not set(pending).issubset(selected):
         raise CompletionError("pendingItems must be a subset of selectedLeafIds")
+    if set(satisfied) | set(pending) != set(selected) or set(satisfied) & set(pending):
+        raise CompletionError("installer receipt must classify every selected item exactly once")
+    if installed != satisfied or deferred != pending:
+        raise CompletionError("installer installed and deferred classifications disagree")
+    statuses = receipt.get("itemStatuses")
+    satisfied_set = set(satisfied)
+    expected_statuses = [
+        {
+            "id": leaf_id,
+            "status": "installed" if leaf_id in satisfied_set else "explicitly-deferred",
+        }
+        for leaf_id in selected
+    ]
+    if statuses != expected_statuses:
+        raise CompletionError("installer item statuses are inconsistent")
     selection = receipt.get("selectionDocument")
     if (
         receipt.get("status") != "installed"
@@ -130,6 +148,26 @@ def load_completion_plan(catalog_path: Path, receipt_path: Path, *, locale: str 
                 leaves[item["id"]] = item
 
     items: list[CompletionItem] = []
+
+    def required_operations(leaf_id: str, visiting: frozenset[str] = frozenset()) -> set[str]:
+        if leaf_id in visiting:
+            raise CompletionError(f"catalog requires cycle at {leaf_id}")
+        leaf = leaves.get(leaf_id, {})
+        operations: set[str] = set()
+        for dependency_id in leaf.get("requires", []):
+            if not isinstance(dependency_id, str):
+                continue
+            dependency = leaves.get(dependency_id)
+            if not isinstance(dependency, dict):
+                continue
+            if dependency.get("kind") == "operation":
+                operations.add(dependency_id)
+            else:
+                operations.update(
+                    required_operations(dependency_id, visiting | {leaf_id})
+                )
+        return operations
+
     for leaf_id in pending:
         leaf = leaves.get(leaf_id)
         if leaf is None:
@@ -141,23 +179,31 @@ def load_completion_plan(catalog_path: Path, receipt_path: Path, *, locale: str 
         license_info = leaf.get("license") if isinstance(leaf.get("license"), dict) else {}
         availability = leaf.get("availability") if isinstance(leaf.get("availability"), dict) else {}
         review = leaf.get("review") if isinstance(leaf.get("review"), dict) else {}
+        operation_dependencies = required_operations(leaf_id)
         requires_acceptance = license_info.get("requiresAcceptance") is True
         user_opt_in = source.get("userOptInRequired") is True
-        executable = (
-            kind == "application" and provider == "pacman" and source_id == "arch"
+        installer_eligible = (
+            kind in {"application", "component"} and provider == "pacman" and source_id == "arch"
             and availability.get("status") == "available"
             and availability.get("channel") == "default"
+            and "x86_64" in availability.get("architectures", [])
             and review.get("status") == "reviewed"
+            and requires_acceptance is False
+            and not operation_dependencies
         )
+        if installer_eligible or kind == "desktop":
+            raise CompletionError(
+                "installer deferred an item that must be handled before first boot: " + leaf_id
+            )
         repository_change = "None"
         if leaf_id == "steam":
             repository_change = "Enable Arch multilib"
         elif user_opt_in:
             repository_change = f"Enable {source_id} (provider not implemented)"
-        if executable:
-            reason = "Ready through official Arch repositories"
+        if operation_dependencies:
+            reason = "Deferred until the required reviewed system operation is implemented"
         elif kind in {"component", "operation"} and provider == "pacman" and source_id == "arch":
-            reason = "Deferred until the installer receipt stores complete component bundle provenance"
+            reason = "Deferred until the required provider and review contract is implemented"
         elif kind == "desktop":
             reason = "Desktop environments are selected and installed only by the installer"
         else:
@@ -178,7 +224,7 @@ def load_completion_plan(catalog_path: Path, receipt_path: Path, *, locale: str 
             license_id=str(license_info.get("spdx", "unknown")),
             requires_acceptance=requires_acceptance,
             repository_change=repository_change,
-            executable=executable,
+            executable=False,
             sensitive=requires_acceptance or user_opt_in or provider != "pacman" or leaf_id == "steam",
             reason=reason,
         ))

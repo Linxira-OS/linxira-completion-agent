@@ -9,6 +9,13 @@ description = "First-online completion workflow for Linxira OS"
 requires-python = ">=3.11"
 license = "MIT"
 dependencies = ["PySide6"]
+authors = [{name = "Linxira OS contributors"}]
+
+[project.urls]
+Homepage = "https://linxira-os.github.io/"
+Repository = "https://github.com/Linxira-OS/linxira-completion-agent"
+Issues = "https://github.com/Linxira-OS/linxira-completion-agent/issues"
+Documentation = "https://linxira-os.github.io/linxira-wiki/"
 
 [project.scripts]
 linxira-completion-agent = "linxira_completion_agent.app:main"

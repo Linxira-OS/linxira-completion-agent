@@ -7,11 +7,13 @@ import subprocess
 import sys
 
 from PySide6.QtCore import QThread, QTimer, Signal
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QHBoxLayout, QLabel, QMessageBox, QPushButton,
-    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
+from .about import show_about
 from .backend import ComponentsBackend
 from .model import CompletionError, CompletionPlan, load_completion_plan
 from .state import read_state, write_state
@@ -57,9 +59,18 @@ class CompletionWindow(QWidget):
         self.resize(880, 560)
 
         layout = QVBoxLayout(self)
+        heading = QHBoxLayout()
         title = QLabel("Complete your installation")
         title.setStyleSheet("font-size: 20px; font-weight: 600;")
-        layout.addWidget(title)
+        heading.addWidget(title)
+        heading.addStretch()
+        about_button = QToolButton()
+        about_button.setIcon(QIcon.fromTheme("help-about"))
+        about_button.setToolTip("About Linxira Completion")
+        about_button.setAccessibleName("About Linxira Completion")
+        about_button.clicked.connect(lambda: show_about(self))
+        heading.addWidget(about_button)
+        layout.addLayout(heading)
         self.network_label = QLabel()
         layout.addWidget(self.network_label)
 
